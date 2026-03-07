@@ -5,7 +5,7 @@
         backgroundAttachment: 'fixed',
         backgroundSize: 'cover',
     } : undefined">
-        <v-app-bar color="primary" :style="glassmorphism">
+        <v-app-bar color="primary" :style="glassmorphism" elevation="0">
             <template v-slot:prepend>
                 <img v-if="logo" :src="logo" height="40" style="margin-left:20px">
             </template>

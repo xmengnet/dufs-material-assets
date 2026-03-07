@@ -1,4 +1,5 @@
 import { createVuetify } from 'vuetify';
+import { md3 } from 'vuetify/blueprints';
 import { mdi } from 'vuetify/iconsets/mdi-svg';
 import 'vuetify/styles';
 import {
@@ -90,6 +91,21 @@ import {
 } from '@mdi/js';
 
 export default createVuetify({
+    blueprint: md3,
+    defaults: {
+        VCard: {
+            rounded: 'xl',
+        },
+        VDialog: {
+            rounded: 'xl',
+        },
+        VMenu: {
+            rounded: 'xl',
+        },
+        VList: {
+            rounded: 'lg',
+        },
+    },
     icons: {
         defaultSet: 'mdi',
         aliases: {

@@ -18,6 +18,7 @@
                             id="upload-btn"
                             v-bind="mergeProps(menu, tooltip)"
                             variant="text"
+                            color="white"
                             icon="$mdiUpload"
                             @mousedown="uploadFilesDown"
                             @mouseup="uploadFilesUp"
@@ -102,6 +103,7 @@
                 <v-btn
                     v-bind="props"
                     variant="text"
+                    color="white"
                     icon="$mdiFolderDownload"
                     :href="currentPath + '?zip'"
                     download
@@ -116,6 +118,7 @@
                 <v-btn
                     v-bind="props"
                     variant="text"
+                    color="white"
                     icon="$mdiFolderPlus"
                     @click="createFolder"
                 ></v-btn>
@@ -129,6 +132,7 @@
                 <v-btn
                     v-bind="props"
                     variant="text"
+                    color="white"
                     icon="$mdiFileDocumentPlus"
                     @click="createFile"
                 ></v-btn>
@@ -143,6 +147,7 @@
                 <v-btn
                     v-bind="props"
                     variant="text"
+                    color="white"
                     :icon="filelist.user ? '$mdiLogout' : '$mdiLogin'"
                     @click="filelist.user ? logout() : login()"
                 ></v-btn>
