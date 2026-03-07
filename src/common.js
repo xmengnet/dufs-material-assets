@@ -177,7 +177,7 @@ export const codeLanguageTable = {
 
 export const previewableImageExts = new Set(['jpg', 'jpeg', 'gif', 'png', 'webp', 'avif', 'svg']);
 export const previewableVideoExts = new Set(['mp4', 'webm', 'ogv']);
-export const previewableAudioExts = new Set(['mp3', 'm4a', 'ogg', 'weba', 'oga', 'flac', 'opus']);
+export const previewableAudioExts = new Set(['mp3', 'm4a', 'ogg', 'weba', 'oga', 'flac', 'opus', 'wav']);
 export const previewableTextExts = new Set(['txt', 'log', 'conf', 'ini', 'md', 'gitignore']);
 export const previewableFontExts = new Set(['ttf', 'ttc', 'otf', 'otc', 'woff', 'woff2']);
 export const previewableTextFilenames = new Set(['readme', 'license']);

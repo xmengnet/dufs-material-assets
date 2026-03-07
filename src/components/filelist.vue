@@ -369,7 +369,7 @@
                                         variant="plain"
                                         icon="$mdiDiscPlayer"
                                         density="comfortable"
-                                        @click="previewDialog = true; previewMode = 'audio'; previewItem = p; updateAudioTags(p); previewAudioDuration = 0"
+                                        @click="previewDialog = true; previewMode = 'audio'; previewItem = p; updateAudioTags(p); previewAudioDuration = 0; nextTick(() => previewAudio?.play())"
                                     ></v-btn>
                                 </template>
                             </v-tooltip>
@@ -654,6 +654,20 @@
                         :title="previewAudioAlbum"
                     >{{ previewAudioAlbum }}</div>
                 </div>
+                <div
+                    v-if="previewAudioLrc.length"
+                    class="w-100 text-center text-body-1 overflow-y-auto mb-4 position-relative"
+                    style="height:80px;mask-image:linear-gradient(transparent,black 20%,black 80%,transparent);-webkit-mask-image:linear-gradient(transparent,black 20%,black 80%,transparent)"
+                    ref="previewAudioLrcElement"
+                >
+                    <div style="height:30px"></div>
+                    <div
+                        v-for="line, index in previewAudioLrc"
+                        :class="{'text-primary font-weight-bold': previewAudioLrcIndex === index, 'text-medium-emphasis': previewAudioLrcIndex !== index}"
+                        style="transition:color 0.3s, font-weight 0.3s;min-height:1.5em"
+                    >{{ line.text }}</div>
+                    <div style="height:30px"></div>
+                </div>
                 <v-slider
                     class="flex-grow-1 mb-4 w-100"
                     color="primary"
@@ -694,16 +708,16 @@
                     ></v-btn>
                     <v-btn
                         :icon="{
-                            once: '$mdiRepeatOnce',
-                            on: '$mdiRepeat',
-                            off: '$mdiRepeatOff',
+                            one: '$mdiRepeatOnce',
+                            all: '$mdiRepeat',
+                            none: '$mdiRepeatOff',
                         }[previewAudioRepeat]"
                         variant="plain"
                         class="mx-1"
                         @click="previewAudioRepeat = {
-                            once: 'on',
-                            on: 'off',
-                            off: 'once',
+                            one: 'none',
+                            all: 'one',
+                            none: 'all',
                         }[previewAudioRepeat]"
                     ></v-btn>
                 </div>
@@ -907,13 +921,16 @@
         class="d-none"
         :src="filelistPathsAudio.map(e => e.fullpath).includes(previewItem.fullpath) ? previewItem.fullpath : undefined"
         :autoplay="!previewAudioPaused"
-        :loop="previewAudioRepeat === 'on'"
+        :loop="previewAudioRepeat === 'one'"
         @error="$toast.error(t('toastFailedLoadAudio'))"
         @play="previewAudioPaused = false"
         @pause="previewAudioPaused = true"
         @ended="previewAudioEnded"
         @loadedmetadata="previewAudioDuration = previewAudio.duration"
-        @timeupdate="previewAudioCurrent = previewAudio.currentTime"
+        @timeupdate="e => {
+            previewAudioCurrent = previewAudio.currentTime;
+            syncLrc();
+        }"
     ></audio>
 </template>
 
@@ -1421,16 +1438,33 @@ const createFile = async () => {
 
 const previewAudioPaused = ref(true);
 const previewAudioShuffle = ref(false);
-/** @type {import('vue').Ref<'once' | 'on' | 'off'>} */
-const previewAudioRepeat = ref('once');
+/** @type {import('vue').Ref<'one' | 'all' | 'none'>} */
+const previewAudioRepeat = ref('all');
 const previewAudioCurrent = ref(0);
 const previewAudioDuration = ref(0);
 const previewAudioCover = ref(null);
 const previewAudioTitle = ref('');
 const previewAudioArtist = ref('');
 const previewAudioAlbum = ref('');
+const previewAudioLrc = ref([]);
+const previewAudioLrcIndex = ref(-1);
+const previewAudioLrcElement = ref(null);
 /** @type {import('vue').Ref<HTMLAudioElement>} */
 const previewAudio = ref(null);
+const syncLrc = () => {
+    if (previewAudioLrc.value.length) {
+        const index = previewAudioLrc.value.findLastIndex(l => l.time <= previewAudioCurrent.value);
+        if (index !== -1 && index !== previewAudioLrcIndex.value) {
+            previewAudioLrcIndex.value = index;
+            if (previewAudioLrcElement.value) {
+                previewAudioLrcElement.value.scrollTo({
+                    top: previewAudioLrcElement.value.children[index + 1].offsetTop - previewAudioLrcElement.value.offsetHeight / 2 + previewAudioLrcElement.value.children[index + 1].offsetHeight / 2,
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }
+};
 const formatAudioTime = t => {
     t = t || 0;
     return `${Math.floor(t / 60).toString().padStart(2, 0)}:${(Math.round(t) % 60).toString().padStart(2, 0)}`;
@@ -1445,7 +1479,7 @@ const previewAudioNext = e => {
     return filelistPathsAudio.value[index === filelistPathsAudio.value.length - 1 ? 0 : (index + 1)];
 };
 const previewAudioEnded = async () => {
-    if (filelistPathsAudio.value.length === 1 || previewAudioRepeat.value === 'once') {
+    if (filelistPathsAudio.value.length === 1 || previewAudioRepeat.value === 'none' && previewItem.value.fullpath === filelistPathsAudio.value[filelistPathsAudio.value.length - 1].fullpath) {
         previewAudioPaused.value = true;
         previewAudio.value.currentTime = 0;
     } else {
@@ -1493,6 +1527,9 @@ const updateAudioTags = async e => {
          *      title: String,
          *      artist: String,
          *      album: String,
+         *      lyrics: {
+         *          lyrics: String,
+         *      },
          *      picture: {
          *          format: String,
          *          data: Number[],
@@ -1501,7 +1538,7 @@ const updateAudioTags = async e => {
          */
         const tags = await new Promise(
             (resolve, reject) => (new jsmediatags.Reader(`${location.protocol}//${location.host}${e.fullpath}`))
-                .setTagsToRead(['title', 'artist', 'album', 'picture'])
+                .setTagsToRead(['title', 'artist', 'album', 'picture', 'lyrics'])
                 .read({
                     onSuccess: e => resolve(e.tags),
                     onError: reject,
@@ -1512,6 +1549,48 @@ const updateAudioTags = async e => {
         previewAudioAlbum.value = tags.album;
         URL.revokeObjectURL(previewAudioCover.value);
         previewAudioCover.value = tags.picture ? URL.createObjectURL(new Blob([(new Uint8Array(tags.picture.data)).buffer], {type: tags.picture.format})) : null;
+        
+        
+        const parseLrcText = text => {
+            const lrc = [];
+            for (const line of text.split('\n')) {
+                const match = line.match(/^\[(\d{2}):(\d{2}(\.\d+)?)\](.*)$/);
+                if (match) {
+                    lrc.push({
+                        time: parseInt(match[1]) * 60 + parseFloat(match[2]),
+                        text: match[4].trim(),
+                    });
+                } else if (line.trim() && !/^\[(.*)\](.*)$/.test(line)) {
+                    // Static lyrics fallback
+                    lrc.push({ time: 0, text: line.trim() });
+                }
+            }
+            return lrc;
+        };
+
+        // Fetch LRC
+        previewAudioLrc.value = [];
+        previewAudioLrcIndex.value = -1;
+        let lrcLoaded = false;
+        try {
+            const lrcUrl = `${location.protocol}//${location.host}${removeSuffix(e.fullpath, '.' + e.ext)}.lrc`;
+            const req = await fetch(lrcUrl, { method: 'GET' });
+            if (req.ok) {
+                const text = await req.text();
+                previewAudioLrc.value = parseLrcText(text);
+                lrcLoaded = true;
+            }
+        } catch (e) {}
+
+        if (!lrcLoaded && tags.lyrics && tags.lyrics.lyrics) {
+            previewAudioLrc.value = parseLrcText(tags.lyrics.lyrics);
+        }
+        
+        if (previewAudioLrc.value.length) {
+            nextTick(() => {
+                syncLrc();
+            });
+        }
     } catch (err) {
         $toast.error(t('toastFailedLoadAudioMetadata', [err.info || err]));
         previewAudioTitle.value = '';
@@ -1519,6 +1598,8 @@ const updateAudioTags = async e => {
         previewAudioAlbum.value = '';
         URL.revokeObjectURL(previewAudioCover.value);
         previewAudioCover.value = '';
+        previewAudioLrc.value = [];
+        previewAudioLrcIndex.value = -1;
     }
 };
 
