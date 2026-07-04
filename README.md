@@ -1,6 +1,6 @@
 # dufs-material-assets
 
-[![CI](https://github.com/TransparentLC/dufs-material-assets/actions/workflows/ci.yml/badge.svg)](https://github.com/TransparentLC/dufs-material-assets/actions/workflows/ci.yml)
+[![CI](https://github.com/TransparentLC/dufs-material-assets/actions/workflows/ci.yml/badge.svg)](https://github.com/TransparentLC/dufs-material-assets/actions/workflows/ci.yml) [<picture><source media="(prefers-color-scheme:dark)" srcset="https://notbyai.fyi/img/developed-by-human-not-by-ai-black-cn.svg"><img src="https://notbyai.fyi/img/developed-by-human-not-by-ai-white-cn.svg" alt="Not By AI" height="20"></picture>](https://notbyai.fyi/)
 
 [dufs](https://github.com/sigoden/dufs) 的 Material Design 风格自定义前端界面。
 
@@ -36,15 +36,27 @@
 * 搜索
 * 深色模式
 * 响应式设计
+* README 文件展示✨
+    * 自动在文件列表下方展示当前目录的 `README.md`、`README.txt` 或 `README` 文件
 * 文本文件预览✨
     * 代码高亮（使用 [prism](https://prismjs.com) 实现）
     * 数学公式渲染（使用 https://i.upmath.me/ 的 API 实现）
     * 支持渲染 Markdown 文件（使用 [Marked](https://marked.js.org/) 实现）
-* README 文件展示✨
-    * 自动在文件列表下方展示当前目录的 `README.md`、`README.txt` 或 `README` 文件
-* 图片查看器
+* 文档预览✨
+    * 支持在线查看 PDF 文件，docx、xlsx、pptx 等 Office 文档和 draw&period;io、VSDX 等图表
+    * Office 文档查看使用 https://view.officeapps.live.com/op/view.aspx 实现，可以在线查看 10 MB 以内的文件
+    * draw&period;io 图表查看使用 [draw.io 的网页版](https://www.drawio.com/blog/online-diagram-viewer)实现
+    * 部署的 dufs 实例需要可以在公网访问才能预览 Office 文档和 draw&period;io 图表，预览时文件会被服务提供者获取并缓存
+    * 默认不启用，有需要的话请在正确配置 dufs 后通过[“自定义界面”](#自定义界面)启用
+* 图片查看器✨
+    * 支持[一键打开 Photopea](https://github.com/photopea/photopea/issues/966) 编辑图片
+    * 也可以使用 Photopea 查看浏览器不支持的 PSD、AI、JPEG XL 等格式的图片（JPEG XL 被浏览器支持后将改为直接使用浏览器查看）
+    * 需要配置好 CORS（启动 dufs 时设置 `--enable-cors` 或通过 nginx 等反向代理时添加 `Access-Control-Allow-Origin: https://www.photopea.com`），因为是本地获取文件后使用 Photopea 打开所以无需公网访问
+    * 默认不启用，有需要的话请在正确配置 dufs 后通过[“自定义界面”](#自定义界面)启用
 * 视频播放器
     * 使用 `<video>` 标签实现，支持的封装和编码可以参见 [caniuse](https://caniuse.com/?search=video%20format)
+    * 支持显示同目录下同名的 WebVTT、SRT、ASS 字幕（使用 [subsrt](https://www.npmjs.com/package/subsrt) 转换为 WebVTT 后使用 `<track>` 标签显示，因此无法支持样式）
+    * 例如对于视频文件 `example.mp4`，会自动加载 `example.{vtt,srt,ass}` 和 `example.*.{vtt,srt,ass}`。
 * 音乐播放器✨
     * 使用 `<audio>` 标签实现，支持的封装和编码可以参见 [caniuse](https://caniuse.com/?search=audio%20format)
     * 同一目录下音频文件顺序/随机/循环播放
@@ -54,7 +66,7 @@
 * 自定义页脚✨
 * 分页展示文件✨
     * 适用于目录内有上千个文件的情况
-    * 默认不启用，需要自定义分页大小
+    * 默认不启用，可以通过[“自定义界面”](#自定义界面)启用
 * 多语言支持✨
     * 已支持的语言或添加翻译请参见 [`src/i18n.js`](https://github.com/TransparentLC/dufs-material-assets/blob/master/src/i18n.js)
 
@@ -188,6 +200,9 @@ window.__DUFS_MATERIAL_CONFIG__ = {
     },
     // 分页大小
     limit: 100,
+    // 是否允许使用第三方服务查看文件（Microsoft Office Online、draw.io、Photopea）
+    // 部署时需要满足对应条件，否则即使启用了也无法查看
+    externalViewer: false,
 };
 
 // 由 dufs 填充的页面内容，不要修改

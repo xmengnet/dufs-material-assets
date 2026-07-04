@@ -355,7 +355,7 @@
                                         variant="plain"
                                         icon="$mdiVideo"
                                         density="comfortable"
-                                        @click="previewDialog = true; previewMode = 'video'; previewItem = p"
+                                        @click="previewDialog = true; previewMode = 'video'; previewItem = p; updateVideoSubtitles(p)"
                                     ></v-btn>
                                 </template>
                             </v-tooltip>
@@ -384,6 +384,48 @@
                                         icon="$mdiFileSearch"
                                         density="comfortable"
                                         @click="previewDialog = true; previewMode = 'pdf'; previewItem = p"
+                                    ></v-btn>
+                                </template>
+                            </v-tooltip>
+                            <v-tooltip
+                                v-if="previewableOfficeExts.has(p.ext) && p.size <= 10485760 && !isLocal && externalViewer"
+                                :text="t('actionViewOffice')"
+                            >
+                                <template v-slot:activator="{ props }">
+                                    <v-btn
+                                        v-bind="props"
+                                        variant="plain"
+                                        icon="$mdiFileSearch"
+                                        density="comfortable"
+                                        @click="previewDialog = true; previewMode = 'office'; previewItem = p"
+                                    ></v-btn>
+                                </template>
+                            </v-tooltip>
+                            <v-tooltip
+                                v-if="previewableDrawioExts.has(p.ext) && !isLocal && externalViewer"
+                                :text="t('actionViewDrawio')"
+                            >
+                                <template v-slot:activator="{ props }">
+                                    <v-btn
+                                        v-bind="props"
+                                        variant="plain"
+                                        icon="$mdiFileSearch"
+                                        density="comfortable"
+                                        @click="previewDialog = true; previewMode = 'drawio'; previewItem = p"
+                                    ></v-btn>
+                                </template>
+                            </v-tooltip>
+                            <v-tooltip
+                                v-if="previewablePhotopeaExts.has(p.ext) && externalViewer"
+                                :text="t('actionViewPhotopea')"
+                            >
+                                <template v-slot:activator="{ props }">
+                                    <v-btn
+                                        v-bind="props"
+                                        variant="plain"
+                                        icon="$mdiLayersSearch"
+                                        density="comfortable"
+                                        @click="previewDialog = true; previewMode = 'photopea'; previewItem = p"
                                     ></v-btn>
                                 </template>
                             </v-tooltip>
@@ -581,6 +623,35 @@
                     <span class="d-none d-sm-inline">({{ formatSize(previewItem.size) }})</span>
                 </span>
                 <v-btn
+                    v-if="externalViewer && (
+                        ((previewMode === 'office' || previewMode === 'drawio') && !isLocal && previewExternalEditSrc) ||
+                        (previewMode === 'photopea' && previewExternalEditSrc) ||
+                        previewMode === 'image'
+                    )"
+                    variant="plain"
+                    icon="$mdiSquareEditOutline"
+                    density="comfortable"
+                    @click="
+                        previewMode === 'image'
+                            ? (getLinkWithToken(previewItem).then(link => open(`https://www.photopea.com/#${encodeURIComponent(JSON.stringify({ files: [link] }))}`)))
+                            : open(previewExternalEditSrc)
+                    "
+                ></v-btn>
+                <v-btn
+                    v-if="previewMode === 'image' || previewMode === 'video'"
+                    variant="plain"
+                    icon="$mdiChevronLeft"
+                    density="comfortable"
+                    @click="navigateMedia(-1)"
+                ></v-btn>
+                <v-btn
+                    v-if="previewMode === 'image' || previewMode === 'video'"
+                    variant="plain"
+                    icon="$mdiChevronRight"
+                    density="comfortable"
+                    @click="navigateMedia(1)"
+                ></v-btn>
+                <v-btn
                     variant="plain"
                     icon="$mdiDownload"
                     density="comfortable"
@@ -619,7 +690,16 @@
                     preload="metadata"
                     class="d-block mx-auto rounded"
                     style="max-width:100%;max-height:calc(100vh - 48px - 52px - 48px)"
-                ></video>
+                >
+                    <track
+                        v-for="e, i in previewVideoSubtitles"
+                        kind="subtitles"
+                        :label="e.label ?? `#${i} (${e.format})`"
+                        :srclang="e.label"
+                        :src="e.fullpath"
+                        :default="i === 0"
+                    >
+                </video>
             </v-card-text>
             <v-card-text
                 v-else-if="previewMode === 'audio'"
@@ -733,6 +813,18 @@
                     class="rounded"
                     style="width:100%;height:calc(100vh - 48px - 52px - 48px)"
                 >
+            </v-card-text>
+            <v-card-text
+                v-else-if="previewMode === 'office' || previewMode === 'drawio' || previewMode === 'photopea'"
+                class="py-4"
+                style="max-height:calc(100vh - 48px - 52px - 16px)"
+            >
+                <iframe
+                    :src="previewExternalViewSrc"
+                    class="rounded"
+                    style="width:100%;height:calc(100vh - 48px - 52px - 48px)"
+                    frameborder="0"
+                ></iframe>
             </v-card-text>
             <v-card-text
                 v-else-if="previewMode === 'font'"
@@ -938,9 +1030,11 @@
 import { ref, computed, onMounted, watch, nextTick, getCurrentInstance, mergeProps, reactive, shallowRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
+import isLocalAddress from 'is-local-address';
 import { marked } from 'marked';
 import prism from 'prismjs';
 import { useI18n } from 'petite-vue-i18n';
+import subsrt from 'subsrt';
 import * as jsmediatags from '../mami-chan/index.js';
 import Uploader from '../uploader.js';
 import NotDefFont from '../assets/AND-Regular.woff2?inline';
@@ -960,6 +1054,9 @@ import {
     previewableAudioExts,
     previewableTextExts,
     previewableFontExts,
+    previewableOfficeExts,
+    previewableDrawioExts,
+    previewablePhotopeaExts,
     previewableTextFilenames,
     readmeFilenames,
 } from '../common.js';
@@ -1016,6 +1113,10 @@ const dufsfetch = (input, init = {}) => fetch(input, init)
 const route = useRoute();
 const router = useRouter();
 const display = useDisplay();
+
+const isLocal = isLocalAddress(location.hostname);
+const externalViewer = window.__DUFS_MATERIAL_CONFIG__?.externalViewer;
+const open = url => window.open(url);
 
 const glassmorphism = Object.fromEntries(['filelist', 'readme', 'preview'].map(k => {
     const e = window.__DUFS_MATERIAL_CONFIG__?.glassmorphism?.[k];
@@ -1296,9 +1397,19 @@ const moveFile = async e => {
 /**
  * @param {PathItem} e
  */
+const getLinkWithToken = async e => {
+    const token = filelist.value.user ? (await dufsfetch(`${e.fullpath}?${e.is_dir ? 'zip&' : ''}tokengen`).then(r => r.text())) : '';
+    const link = new URL(`${location.protocol}//${location.host}${e.fullpath}`);
+    if (e.is_dir) link.searchParams.set('zip', '');
+    if (token) link.searchParams.set('token', token);
+    return link.toString();
+};
+
+/**
+ * @param {PathItem} e
+ */
 const copyLinkWithToken = async e => {
-    const token = await dufsfetch(`${e.fullpath}?${e.is_dir ? 'zip&' : ''}tokengen`).then(r => r.text());
-    const link = `${location.protocol}//${location.host}${e.fullpath}?${e.is_dir ? 'zip&' : ''}token=${token}`;
+    const link = await getLinkWithToken(e);
     if (navigator.clipboard) {
         await navigator.clipboard.writeText(link);
     } else {
@@ -1309,7 +1420,7 @@ const copyLinkWithToken = async e => {
         document.execCommand('copy');
         document.body.removeChild(el);
     }
-    $toast.success(t('toastCopyLinkWithToken', [formatTimestamp(parseInt(token.substring(128, 144), 16))]));
+    $toast.success(t('toastCopyLinkWithToken', [formatTimestamp(parseInt((new URL(link)).searchParams.get('token').substring(128, 144), 16))]));
 };
 
 /**
@@ -1375,7 +1486,7 @@ document.body.addEventListener('drop', async e => {
         .map(([path, file]) => {
             const cp = currentPath.value;
             return new Uploader(
-                cp + encodeURIComponent(path),
+                cp + encodeURIComponent(path).replaceAll('%2F', '/'),
                 file,
                 () => {
                     if (currentPath.value === cp) updateFilelist();
@@ -1402,11 +1513,17 @@ const uploadFilesUp = () => {
     clearTimeout(uploadlistMenuTimer);
     if (uploadlistMenuTimer !== null) uploadFilesClick();
 };
+addEventListener('beforeunload', e => {
+    if (uploadlist.value.some(t => !t.uploaded && !t.fail)) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
 
 const createFolder = async () => {
     const path = await $dialog.promises.prompt(t('dialogCreateFolderLabel'), t('titleCreateFolder'));
     if (!path) return;
-    const url = currentPath.value + encodeURIComponent(path);
+    const url = currentPath.value + encodeURIComponent(path).replaceAll('%2F', '/');
     if (await dufsfetch(url + '/?json').then(r => r.json()).then((/** @type {DufsData} */ r) => r.dir_exists)) {
         return $toast.warning(t('toastCreateFolderExists', [path]));
     }
@@ -1418,7 +1535,7 @@ const createFolder = async () => {
 const createFile = async () => {
     const path = await $dialog.promises.prompt(t('dialogCreateFileLabel'), t('titleCreateFile'));
     if (!path) return;
-    const url = currentPath.value + encodeURIComponent(path);
+    const url = currentPath.value + encodeURIComponent(path).replaceAll('%2F', '/');
     try {
         const status = await fetch(url, { method: 'HEAD' }).then(r => r.status);
         if (status === 200) {
@@ -1470,6 +1587,14 @@ const formatAudioTime = t => {
     return `${Math.floor(t / 60).toString().padStart(2, 0)}:${(Math.round(t) % 60).toString().padStart(2, 0)}`;
 };
 const filelistPathsAudio = computed(() => filelistPathsSorted.value.filter(e => previewableAudioExts.has(e.ext)));
+
+const previewableMedia = computed(() => {
+    if (!filelist.value.paths) return [];
+    return filelist.value.paths.filter(p =>
+        previewableImageExts.has(p.ext) || previewableVideoExts.has(p.ext)
+    );
+});
+
 const previewAudioPrev = e => {
     const index = filelistPathsAudio.value.map(e => e.fullpath).indexOf(e.fullpath);
     return filelistPathsAudio.value[index === 0 ? (filelistPathsAudio.value.length - 1) : (index - 1)];
@@ -1504,6 +1629,55 @@ watch(previewDialog, () => {
     }
 });
 
+
+/** @type {import('vue').Ref<{ fullpath: string, label: string, format: string }[]>} */
+const previewVideoSubtitles = ref([]);
+
+/**
+ * @param {PathItem} e
+ */
+const updateVideoSubtitles = async e => {
+    const filenameWithoutExt = removeSuffix(e.filename, '.' + getExt(e.filename));
+    const subtitleFiles = await Promise.all(
+        filelist.value.paths
+            .reduce((a, c) => {
+                if (!c.is_dir) {
+                    const m = removePrefix(c.filename, filenameWithoutExt).match(/^(?:\.(.+?))?\.(vtt|srt|ass)$/i);
+                    if (m) {
+                        a.push({
+                            fullpath: c.fullpath,
+                            label: m[1],
+                            format: m[2].toLowerCase(),
+                        });
+                    }
+                }
+                return a;
+            }, [])
+            .map(async (/** @type {{ fullpath: string, label: string, format: string }} */ e) => ({
+                fullpath: (e.format === 'vtt'
+                    ? e.fullpath
+                    : URL.createObjectURL(new Blob(
+                        [subsrt.convert(
+                            await dufsfetch(e.fullpath).then(r => r.text()),
+                            { format: 'vtt' },
+                        )],
+                        { type: 'text/vtt' },
+                    ))
+                ),
+                label: e.label,
+                format: e.format,
+            }))
+    );
+    previewVideoSubtitles.value.length = 0;
+    previewVideoSubtitles.value.push(...subtitleFiles);
+};
+watch(previewDialog, () => {
+    if (!previewDialog.value) {
+        previewVideoSubtitles.value.forEach(e => e.fullpath.startsWith('blob:') && URL.revokeObjectURL(e.fullpath));
+        previewVideoSubtitles.value.length = 0;
+    }
+});
+
 if (navigator.mediaSession) {
     watch([previewAudioTitle, previewAudioArtist, previewAudioAlbum, previewAudioCover], () => {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -1516,6 +1690,31 @@ if (navigator.mediaSession) {
     navigator.mediaSession.setActionHandler('previoustrack', () => updateAudioTags((previewItem.value = previewAudioPrev(previewItem.value))));
     navigator.mediaSession.setActionHandler('nexttrack', () => updateAudioTags((previewItem.value = previewAudioNext(previewItem.value))));
 }
+
+/**
+ * @param {Number} step - 1 to Next, to Prev
+ */
+const navigateMedia = (step) => {
+    const list = previewableMedia.value;
+    if (list.length <= 1) return;
+
+    const currentIndex = list.findIndex(item => item.fullpath === previewItem.value.fullpath);
+
+    let newIndex = currentIndex + step;
+    if (newIndex >= list.length) newIndex = 0;
+    if (newIndex < 0) newIndex = list.length - 1;
+
+    const newItem = list[newIndex];
+
+    previewItem.value = newItem;
+
+    if (previewableImageExts.has(newItem.ext)) {
+        previewMode.value = 'image';
+    } else if (previewableVideoExts.has(newItem.ext)) {
+        previewMode.value = 'video';
+        updateVideoSubtitles(newItem);
+    }
+};
 
 /**
  * @param {PathItem} e
@@ -1613,6 +1812,37 @@ onMounted(() => document.head.appendChild(previewFontStyleElement));
 watch(previewItem, () => {
     if (previewMode.value !== 'font' || !previewItem.value.fullpath) return;
     previewFontStyleElement.innerHTML = `@font-face{font-family:${previewFontFamily};src:url(${previewItem.value.fullpath})}@font-face{font-family:"Adobe NotDef";src:url(${NotDefFont})}`;
+});
+
+const previewExternalViewSrc = ref('');
+const previewExternalEditSrc = ref('');
+watch(previewItem, async () => {
+    if (!externalViewer || !['office', 'drawio', 'photopea'].includes(previewMode.value) || !previewItem.value.fullpath) return;
+    previewExternalViewSrc.value = '';
+    previewExternalEditSrc.value = '';
+    const link = await getLinkWithToken(previewItem.value);
+    switch (previewMode.value) {
+        case 'office':
+            previewExternalViewSrc.value = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(link)}`;
+            break;
+        case 'drawio':
+            previewExternalViewSrc.value = `https://app.diagrams.net/?lightbox=1#U${encodeURIComponent(link)}`;
+            previewExternalEditSrc.value = `https://app.diagrams.net/#U${encodeURIComponent(link)}`;
+            break;
+        case 'photopea':
+            // https://www.photopea.com/api/
+            previewExternalViewSrc.value = `https://www.photopea.com/#${encodeURIComponent(JSON.stringify({
+                files: [link],
+                environment: {
+                    vmode: 2,
+                    intro: false,
+                },
+            }))}`;
+            previewExternalEditSrc.value = `https://www.photopea.com/#${encodeURIComponent(JSON.stringify({
+                files: [link],
+            }))}`;
+            break;
+    }
 });
 
 </script>
